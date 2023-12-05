@@ -1,31 +1,42 @@
-import { GetParametersCommand, SSMClient } from "@aws-sdk/client-ssm";
+import {
+  GetParameterCommand,
+  GetParametersCommand,
+  SSMClient,
+} from "@aws-sdk/client-ssm";
 import { Client } from "@notionhq/client";
 import { WebClient } from "@slack/web-api";
 import { Context, ScheduledEvent } from "aws-lambda";
 
 export const handler = async (event: ScheduledEvent, context: Context) => {
-  const ssm = new SSMClient({ region: "ap-northeast-1" });
-  const ssmParams = {
-    Names: [
-      process.env["NOTION_AUTH"]!,
-      process.env["NOTION_DB_ID"]!,
-      process.env["SLACK_BOT_TOKEN"]!,
-    ],
-    WithDecryption: true,
-  };
-  const command = new GetParametersCommand(ssmParams);
-
-  let notionClient: Client | null = null;
-  let notionDBId: string | undefined;
-  let slackClient: WebClient | null = null;
-
   try {
-    const response = await ssm.send(command);
-    if (!response) {
-      throw new Error("認証情報の取得に失敗");
-    }
+    let notionClient: Client | null = null;
+    let notionDBId: string | undefined;
+    let slackClient: WebClient | null = null;
+    let channelName: string | undefined;
 
-    response.Parameters?.forEach((param) => {
+    const secureStrParams = {
+      Names: [
+        process.env["NOTION_AUTH"]!,
+        process.env["NOTION_DB_ID"]!,
+        process.env["SLACK_BOT_TOKEN"]!,
+      ],
+      WithDecryption: true,
+    };
+    const strParam = {
+      Name: process.env["SLACK_CHANNEL_NAME"],
+      WithDecryption: false,
+    };
+
+    const secureStrCommand = new GetParametersCommand(secureStrParams);
+    const strCommand = new GetParameterCommand(strParam);
+
+    const ssm = new SSMClient({ region: "ap-northeast-1" });
+    const secureStrResponse = await ssm.send(secureStrCommand);
+    const strResponse = await ssm.send(strCommand);
+
+    channelName = strResponse.Parameter?.Value;
+
+    secureStrResponse.Parameters?.forEach((param) => {
       switch (param.Name) {
         case "countAndNotifyNotionPagesToSlack-notionAuth":
           notionClient = new Client({
@@ -82,9 +93,9 @@ export const handler = async (event: ScheduledEvent, context: Context) => {
     });
     const memoCount = queryResult.results.length.toString();
 
-    slack.chat.postMessage({
+    await slack.chat.postMessage({
       text: memoCount,
-      channel: process.env["SLACK_CHANNEL_NAME"]!,
+      channel: channelName!,
     });
   } catch (error: unknown) {
     if (error instanceof Error) {

@@ -34,10 +34,7 @@ export class CountAndNotifyNotionPagesToSlackStack extends cdk.Stack {
           NOTION_AUTH: "countAndNotifyNotionPagesToSlack-notionAuth",
           NOTION_DB_ID: "countAndNotifyNotionPagesToSlack-notionDBId",
           SLACK_BOT_TOKEN: "countAndNotifyNotionPagesToSlack-slackBotToken",
-          SLACK_CHANNEL_NAME: "times-matsu",
-        },
-        bundling: {
-          sourceMap: true,
+          SLACK_CHANNEL_NAME: "countAndNotifyNotionPagesToSlack-channelName",
         },
         timeout: cdk.Duration.seconds(30),
       }
@@ -46,7 +43,7 @@ export class CountAndNotifyNotionPagesToSlackStack extends cdk.Stack {
     // EventBridgeでlambdaを定期実行
     // 試験的に5分毎に実行するように設定
     new cdk.aws_events.Rule(this, "Schedule", {
-      schedule: cdk.aws_events.Schedule.rate(cdk.Duration.minutes(2)),
+      schedule: cdk.aws_events.Schedule.rate(cdk.Duration.minutes(1)),
       targets: [new cdk.aws_events_targets.LambdaFunction(lambda)],
     });
   }
