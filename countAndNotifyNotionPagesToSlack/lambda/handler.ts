@@ -7,72 +7,60 @@ import { Client } from "@notionhq/client";
 import { WebClient } from "@slack/web-api";
 import { Context, ScheduledEvent } from "aws-lambda";
 
+const NOTION_AUTH_KEY = process.env["NOTION_AUTH"]!;
+const NOTION_DB_ID_KEY = process.env["NOTION_DB_ID"]!;
+const SLACK_BOT_TOKEN_KEY = process.env["SLACK_BOT_TOKEN"]!;
+const SLACK_CHANNEL_NAME_KEY = process.env["SLACK_CHANNEL_NAME"]!;
+
+const ssm = new SSMClient({ region: "ap-northeast-1" });
+
+const getParametersFromSSM = async () => {
+  const secureStrResponse = await ssm.send(
+    new GetParametersCommand({
+      Names: [NOTION_AUTH_KEY, NOTION_DB_ID_KEY, SLACK_BOT_TOKEN_KEY],
+      WithDecryption: true,
+    })
+  );
+
+  const strResponse = await ssm.send(
+    new GetParameterCommand({
+      Name: SLACK_CHANNEL_NAME_KEY,
+      WithDecryption: false,
+    })
+  );
+
+  return {
+    notionAuth: secureStrResponse.Parameters?.find(
+      (p) => p.Name === NOTION_AUTH_KEY
+    )?.Value,
+
+    notionDBId: secureStrResponse.Parameters?.find(
+      (p) => p.Name === NOTION_DB_ID_KEY
+    )?.Value,
+
+    slackBotToken: secureStrResponse.Parameters?.find(
+      (p) => p.Name === SLACK_BOT_TOKEN_KEY
+    )?.Value,
+
+    slackChannelName: strResponse.Parameter?.Value,
+  };
+};
+
 export const handler = async (event: ScheduledEvent, context: Context) => {
   try {
-    let notionClient: Client | null = null;
-    let notionDBId: string | undefined;
-    let slackClient: WebClient | null = null;
-    let channelName: string | undefined;
+    const { notionAuth, notionDBId, slackBotToken, slackChannelName } =
+      await getParametersFromSSM();
 
-    const secureStrParams = {
-      Names: [
-        process.env["NOTION_AUTH"]!,
-        process.env["NOTION_DB_ID"]!,
-        process.env["SLACK_BOT_TOKEN"]!,
-      ],
-      WithDecryption: true,
-    };
-    const strParam = {
-      Name: process.env["SLACK_CHANNEL_NAME"],
-      WithDecryption: false,
-    };
+    if (!notionAuth || !notionDBId || !slackBotToken || !slackChannelName) {
+      throw new Error("必要な情報を全て取得できませんでした");
+    }
 
-    const secureStrCommand = new GetParametersCommand(secureStrParams);
-    const strCommand = new GetParameterCommand(strParam);
-
-    const ssm = new SSMClient({ region: "ap-northeast-1" });
-    const secureStrResponse = await ssm.send(secureStrCommand);
-    const strResponse = await ssm.send(strCommand);
-
-    channelName = strResponse.Parameter?.Value;
-
-    secureStrResponse.Parameters?.forEach((param) => {
-      switch (param.Name) {
-        case "countAndNotifyNotionPagesToSlack-notionAuth":
-          notionClient = new Client({
-            auth: param.Value,
-          });
-          break;
-
-        case "countAndNotifyNotionPagesToSlack-notionDBId":
-          notionDBId = param.Value;
-          break;
-
-        case "countAndNotifyNotionPagesToSlack-slackBotToken":
-          slackClient = new WebClient(param.Value);
-          break;
-
-        default:
-          throw new Error("想定外の情報を取得しました");
-      }
+    const notionClient = new Client({
+      auth: notionAuth,
     });
+    const slackClient = new WebClient(slackBotToken);
 
-    if (!notionClient) {
-      throw new Error("notionClientの情報を取得できていません");
-    }
-
-    if (!notionDBId) {
-      throw new Error("notionDBIdの情報を取得できていません");
-    }
-
-    if (!slackClient) {
-      throw new Error("slackClientの情報を取得できていません");
-    }
-
-    const notion = notionClient as Client;
-    const slack = slackClient as WebClient;
-
-    const queryResult = await notion.databases.query({
+    const queryResult = await notionClient.databases.query({
       database_id: notionDBId,
       filter: {
         and: [
@@ -93,13 +81,13 @@ export const handler = async (event: ScheduledEvent, context: Context) => {
     });
     const memoCount = queryResult.results.length.toString();
 
-    await slack.chat.postMessage({
+    await slackClient.chat.postMessage({
       text: memoCount,
-      channel: channelName!,
+      channel: slackChannelName!,
     });
   } catch (error: unknown) {
     if (error instanceof Error) {
-      console.log(error);
+      console.error("エラーが発生しました", error);
     }
   }
 };
