@@ -41,9 +41,9 @@ export class CountAndNotifyNotionPagesToSlackStack extends cdk.Stack {
     );
 
     // EventBridgeでlambdaを定期実行
-    // 試験的に5分毎に実行するように設定
+    // 毎週月曜日 AM 8:00 に実行
     new cdk.aws_events.Rule(this, "Schedule", {
-      schedule: cdk.aws_events.Schedule.rate(cdk.Duration.minutes(1)),
+      schedule: cdk.aws_events.Schedule.expression("cron(0 23 ? * SUN *)"),
       targets: [new cdk.aws_events_targets.LambdaFunction(lambda)],
     });
   }
