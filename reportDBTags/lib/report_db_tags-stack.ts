@@ -1,6 +1,5 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
 
 export class ReportDbTagsStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -35,7 +34,7 @@ export class ReportDbTagsStack extends cdk.Stack {
           NOTION_READ_DB_ID: "reportDBTags-notionReadDBId",
           NOTION_WRITE_DB_ID: "reportDBTags-notionWriteDBId",
         },
-        timeout: cdk.Duration.seconds(300),
+        timeout: cdk.Duration.seconds(360),
       }
     );
 
