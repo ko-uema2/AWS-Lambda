@@ -52,6 +52,10 @@ export const handler = async (event: ScheduledEvent, context: Context) => {
         // Tag名称と利用回数をデータベースに書き込み
         await writeDB(writeData, notionClient, notionWriteDBId);
       }
+
+      // データベースの説明を更新
+      await updateDBDescription(event, notionClient, notionWriteDBId);
+
       console.log("- end - handler");
     } else {
       throw new AppError(
@@ -127,7 +131,7 @@ const readDBTags = async (notionClient: Client, notionReadDBId: string) => {
 const deleteAllPagesFromDB = async (
   notionClient: Client,
   notionWriteDBId: string
-) => {
+): Promise<void> => {
   try {
     console.log("- start - deleteAllPagesFromDB");
     let allPages = [];
@@ -174,7 +178,7 @@ const reportDB = async (
   tagInfo: SelectPropertyResponse,
   notionClient: Client,
   notionReadDBId: string
-) => {
+): Promise<number> => {
   try {
     console.log("- start - reportDB");
     const queryResult = await notionClient.databases.query({
@@ -204,7 +208,7 @@ const writeDB = async (
   writeData: WriteDataType,
   notionClient: Client,
   notionWriteDBId: string
-) => {
+): Promise<void> => {
   try {
     console.log("- start - writeDB");
     await notionClient.pages.create({
@@ -235,4 +239,45 @@ const writeDB = async (
       throw new AppError(writeDB.name, UNKNOWN_ERROR_MESSAGE);
     }
   }
+};
+
+const updateDBDescription = async (
+  event: ScheduledEvent,
+  notionClient: Client,
+  notionWriteDBId: string
+): Promise<void> => {
+  const updateDateStr: string = formatDateObj(new Date(event.time));
+
+  await notionClient.databases.update({
+    database_id: notionWriteDBId,
+    title: [
+      {
+        type: "text",
+        text: {
+          content: "ライブラリタグ　レポート",
+          link: null,
+        },
+      },
+    ],
+    description: [
+      {
+        type: "text",
+        text: {
+          content: `更新日時： ${updateDateStr}`,
+          link: null,
+        },
+      },
+    ],
+  });
+};
+
+const formatDateObj = (dateObj: Date): string => {
+  return new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    timeZone: "Asia/Tokyo",
+  }).format(dateObj);
 };
